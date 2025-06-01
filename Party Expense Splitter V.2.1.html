@@ -1,0 +1,2060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Party Expense Splitter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Eakkamai:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body {
+            font-family: 'Eakkamai', sans-serif; /* Set Eakkamai font across the page */
+            background-color: #f0f4f8; /* Light blue-gray background */
+            font-size: 16px; /* Default font size, will be overridden by JS */
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0; /* Light gray track */
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8; /* Medium gray thumb */
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; /* Darker gray on hover */
+        }
+        /* Style for modals */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            width: 90%;
+            max-width: 28rem; /* sm:max-w-md */
+            max-height: 90vh; /* Limit height for scrollable content */
+            overflow-y: auto; /* Enable scrolling for taller modals */
+        }
+
+        /* Force mobile layout styles */
+        body[data-view-mode="mobile"] #app-container {
+            max-width: 400px !important; /* Force narrow width */
+            margin: 0 auto !important; /* Center it */
+            padding: 1rem !important; /* Smaller padding */
+        }
+
+        body[data-view-mode="mobile"] .grid.grid-cols-1.sm\:grid-cols-2 {
+            grid-template-columns: 1fr !important; /* Force single column */
+        }
+
+        body[data-view-mode="mobile"] .flex.flex-col.sm\:flex-row {
+            flex-direction: column !important; /* Force column layout */
+        }
+
+        body[data-view-mode="mobile"] .w-full.sm\:w-3\/5,
+        body[data-view-mode="mobile"] .w-full.sm\:w-1\/5 {
+            width: 100% !important; /* Full width for inputs */
+        }
+
+        body[data-view-mode="mobile"] #participantsList,
+        body[data-view-mode="mobile"] #expensesList {
+            grid-template-columns: 1fr !important; /* Single column for lists */
+        }
+
+        /* Force desktop layout styles (overrides mobile on small screens) */
+        body[data-view-mode="desktop"] #app-container {
+            max-width: 1024px !important; /* Force wide width */
+            margin: 0 auto !important;
+            padding: 2.5rem !important;
+        }
+
+        body[data-view-mode="desktop"] .grid.grid-cols-1.sm\:grid-cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important; /* Force 2 columns */
+        }
+
+        body[data-view-mode="desktop"] .flex.flex-col.sm\:flex-row {
+            flex-direction: row !important; /* Force row layout */
+        }
+
+        body[data-view-mode="desktop"] .w-full.sm\:w-3\/5 {
+            width: 60% !important;
+        }
+        body[data-view-mode="desktop"] .w-full.sm\:w-1\/5 {
+            width: 20% !important;
+        }
+
+        body[data-view-mode="desktop"] #participantsList {
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important; /* Force 4 columns */
+        }
+        body[data-view-mode="desktop"] #expensesList .flex.flex-col.sm\:flex-row {
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 sm:p-6 lg:p-8">
+
+    <div id="app-container" class="bg-white shadow-xl rounded-2xl p-6 sm:p-8 lg:p-10 w-full max-w-4xl mx-auto my-8 border border-gray-200">
+        <h1 class="text-3xl sm:text-4xl font-bold text-center text-gray-800 mb-8">🎉 โปรแกรมหารค่าใช้จ่ายปาร์ตี้ 🎉</h1>
+
+        <div id="partyInfoSection" class="mb-8 p-6 bg-blue-50 rounded-xl border border-blue-200 shadow-md">
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4 flex justify-between items-center">
+                <span>🗓️ ข้อมูลปาร์ตี้</span>
+                <div class="flex gap-2 flex-wrap justify-end">
+                    <button id="manageLocationsBtn"
+                            class="bg-blue-200 hover:bg-blue-300 text-blue-800 text-sm font-semibold py-1 px-3 rounded-full transition duration-200 shadow-sm opacity-75 hover:opacity-100">
+                        จัดการรายการยอดนิยม
+                    </button>
+                    <button id="clearAllBtn"
+                            class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-sm">
+                        ล้างค่า
+                    </button>
+                    <button id="decreaseFontSizeBtn"
+                            class="bg-blue-400 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-sm">
+                        A-
+                    </button>
+                    <button id="increaseFontSizeBtn"
+                            class="bg-blue-400 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-sm">
+                        A+
+                    </button>
+                    <button id="installAppBtn"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-sm hidden">
+                        ติดตั้งแอป
+                    </button>
+                </div>
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="partyDateInput" class="block text-base font-medium text-gray-700 mb-1">วันที่จัดปาร์ตี้</label>
+                    <input type="date" id="partyDateInput"
+                           class="w-full p-3 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 text-gray-700">
+                </div>
+                <div>
+                    <label for="partyLocationInput" class="block text-base font-medium text-gray-700 mb-1">สถานที่จัดปาร์ตี้</label>
+                    <input type="text" id="partyLocationInput" placeholder="เช่น บ้านเพื่อน, ร้านอาหาร"
+                           class="w-full p-3 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 text-gray-700 mb-2">
+                    <div id="predefinedLocationsButtons" class="flex flex-wrap gap-2">
+                        </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="participantsSection" class="mb-8 p-6 bg-purple-50 rounded-xl border border-purple-200 shadow-md">
+            <h2 class="text-2xl font-semibold text-purple-700 mb-4 flex justify-between items-center">
+                <span>👥 ผู้เข้าร่วม</span>
+                <div class="flex gap-2">
+                    <button id="manageParticipantsBtn"
+                            class="bg-purple-200 hover:bg-purple-300 text-purple-800 text-sm font-semibold py-1 px-3 rounded-full transition duration-300 ease-in-out transform hover:scale-105 opacity-75 hover:opacity-100">
+                        จัดการรายการยอดนิยม
+                    </button>
+                    <span id="totalParticipantsSummary" class="text-base font-bold text-purple-600"></span>
+                </div>
+            </h2>
+            <div class="flex flex-col sm:flex-row gap-4 mb-4">
+                <input type="text" id="participantNameInput" placeholder="ป้อนชื่อผู้เข้าร่วม"
+                       class="flex-grow p-3 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-200 text-gray-700">
+                <button id="addParticipantBtn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                    เพิ่มผู้เข้าร่วม
+                </button>
+            </div>
+            <div id="predefinedParticipantsButtons" class="flex flex-wrap gap-2 mb-4">
+                </div>
+            <div id="participantsList" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
+                </div>
+        </div>
+
+        <div id="expensesSection" class="mb-8 p-6 bg-emerald-50 rounded-xl border border-emerald-200 shadow-md">
+            <h2 class="text-2xl font-semibold text-emerald-700 mb-4 flex justify-between items-center">
+                <span>💸 ค่าใช้จ่าย</span>
+                <div class="flex gap-2">
+                    <button id="manageExpensesBtn"
+                            class="bg-emerald-200 hover:bg-emerald-300 text-emerald-800 text-sm font-semibold py-1 px-3 rounded-full transition duration-300 ease-in-out transform hover:scale-105 opacity-75 hover:opacity-100">
+                        จัดการค่าใช้จ่ายยอดนิยม
+                    </button>
+                    <button id="manageAmountsBtn"
+                            class="bg-emerald-200 hover:bg-emerald-300 text-emerald-800 text-sm font-semibold py-1 px-3 rounded-full transition duration-300 ease-in-out transform hover:scale-105 opacity-75 hover:opacity-100">
+                        จัดการจำนวนเงินยอดนิยม
+                    </button>
+                </div>
+            </h2>
+            <div class="mb-4">
+                <label for="expenseDescriptionInput" class="block text-base font-medium text-gray-700 mb-1">รายละเอียดค่าใช้จ่าย</label>
+                <input type="text" id="expenseDescriptionInput" placeholder="ป้อนรายละเอียด หรือเลือกจากรายการด้านล่าง"
+                       class="w-full p-3 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200 text-gray-700 mb-2">
+                <div id="predefinedExpensesButtons" class="flex flex-wrap gap-2">
+                    </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                <div class="w-full sm:w-2/5"> <label for="expenseUnitPriceInput" class="block text-base font-medium text-gray-700 mb-1">ราคาต่อหน่วย</label>
+                    <input type="number" id="expenseUnitPriceInput" placeholder="ราคาต่อหน่วย" min="0" step="0.01"
+                           class="w-full p-3 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200 text-gray-700 mb-2">
+                    <div id="predefinedAmountsButtons" class="flex flex-wrap gap-2">
+                        </div>
+                </div>
+                <div class="w-full sm:w-1/5">
+                    <label for="expenseQuantityInput" class="block text-base font-medium text-gray-700 mb-1">จำนวน (หน่วย)</label>
+                    <input type="number" id="expenseQuantityInput" value="1" min="1" step="1"
+                           class="w-full p-3 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200 text-gray-700 mb-1">
+                    <div class="flex items-center justify-between w-full">
+                        <button id="decreaseQuantityBtn" class="bg-emerald-200 hover:bg-emerald-300 text-emerald-800 font-semibold py-1 px-2 rounded-full shadow-sm transition duration-200 text-sm">ลด</button>
+                        <button id="increaseQuantityBtn" class="bg-emerald-200 hover:bg-emerald-300 text-emerald-800 font-semibold py-1 px-2 rounded-full shadow-sm transition duration-200 text-sm">เพิ่ม</button>
+                    </div>
+                </div>
+                <div class="w-full sm:w-2/5"> <label for="expenseAmountInput" class="block text-base font-medium text-gray-700 mb-1">จำนวนเงินรวม</label>
+                    <input type="number" id="expenseAmountInput" placeholder="จำนวนเงินรวม (จะคำนวณอัตโนมัติ)"
+                           class="w-full p-3 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200 text-gray-700" min="0" step="0.01" readonly>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-base font-medium text-gray-700 mb-1">เลือกผู้จ่าย</label>
+                <div id="payerButtonsContainer" class="flex flex-wrap gap-2 w-full sm:w-3/5">
+                    </div>
+            </div>
+            <div class="flex justify-end">
+                <button id="addExpenseBtn"
+                        class="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 w-full sm:w-auto">
+                    เพิ่มค่าใช้จ่าย
+                </button>
+            </div>
+            <div id="expensesList" class="space-y-2">
+                </div>
+            <div class="flex justify-end mt-4">
+                <span id="totalExpensesAmountSummary" class="text-xl font-bold text-emerald-800"></span>
+            </div>
+        </div>
+
+        <div id="summarySection" class="p-6 bg-purple-50 rounded-xl border border-purple-200 shadow-md">
+            <h2 class="text-2xl font-semibold text-purple-700 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                <span>📊 สรุป</span>
+                <div class="flex flex-wrap gap-2 mt-2 sm:mt-0">
+                    </div>
+            </h2>
+            <div id="summaryTableContainer" class="overflow-x-auto">
+                <table class="min-w-full bg-white rounded-lg shadow-sm">
+                    <thead>
+                        <tr class="bg-purple-100 text-purple-800 uppercase text-base leading-normal">
+                            <th class="py-3 px-6 text-left rounded-tl-lg">ผู้เข้าร่วม</th>
+                            <th class="py-3 px-6 text-left">ส่วนแบ่งรวม</th>
+                            <th class="py-3 px-6 text-left">จำนวนเงินที่จ่ายไป</th>
+                            <th class="py-3 px-6 text-left rounded-tr-lg">ยอดคงเหลือ (ได้คืน / ยอดที่ต้องจ่าย)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summaryTableBody" class="text-gray-700 text-base font-light">
+                        </tbody>
+                </table>
+            </div>
+
+            <div id="detailedSummary" class="mt-8 space-y-6">
+                </div>
+            
+            <div class="mt-8 p-6 bg-gray-100 rounded-xl border border-gray-200">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4">📝 หมายเหตุ</h2>
+                <textarea id="notesInput" rows="4" placeholder="เพิ่มข้อความหมายเหตุเกี่ยวกับปาร์ตี้ที่นี่..."
+                          class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 transition duration-200 text-gray-700"></textarea>
+            </div>
+
+            <div class="mt-8 p-6 bg-gray-100 rounded-xl border border-gray-200 text-center flex flex-col sm:flex-row justify-center gap-4">
+                <button id="printAllReportBtn"
+                        class="bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-1">
+                    🖨️ พิมพ์/บันทึกรายงานทั้งหมด (PNG)
+                </button>
+                <button id="printPartyAndParticipantsBtn"
+                        class="bg-green-300 hover:bg-green-400 text-green-700 font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-1">
+                    🖨️ บันทึก: ข้อมูลปาร์ตี้ & ผู้เข้าร่วม (PNG)
+                </button>
+                <button id="printExpensesBtn"
+                        class="bg-orange-300 hover:bg-orange-400 text-orange-700 font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-1">
+                    🖨️ บันทึก: ค่าใช้จ่าย (PNG)
+                </button>
+                <button id="printSummaryBtn"
+                        class="bg-purple-300 hover:bg-purple-400 text-purple-700 font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-1">
+                    🖨️ บันทึก: สรุป (PNG)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="manageListModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="manageListModalTitle" class="text-xl font-semibold text-gray-800 mb-4">จัดการรายการยอดนิยม</h3>
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="modalListItemInput" placeholder="เพิ่มรายการใหม่"
+                       class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 text-gray-700">
+                <button id="addModalListItemBtn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                    เพิ่ม
+                </button>
+            </div>
+            <div id="modalListItemsContainer" class="space-y-2 mb-6 max-h-60 overflow-y-auto pr-2 border border-gray-200 p-2 rounded-lg bg-gray-50">
+                </div>
+            <div class="flex justify-end gap-4">
+                <button id="closeManageListModalBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    ปิด
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="payerSelectionModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">เลือกผู้จ่ายสำหรับค่าใช้จ่ายนี้</h3>
+            <select id="modalPayerSelect" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 bg-white text-gray-700 mb-4">
+                <option value="">เลือกผู้จ่าย</option>
+            </select>
+            <div class="flex justify-end gap-4">
+                <button id="cancelPayerSelectionBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    ยกเลิก
+                </button>
+                <button id="confirmPayerSelectionBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    ยืนยัน
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editExpenseModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">แก้ไขรายการค่าใช้จ่าย</h3>
+            <div class="space-y-4 mb-6">
+                <div>
+                    <label for="editExpenseDescription" class="block text-base font-medium text-gray-700 mb-1">รายละเอียดค่าใช้จ่าย</label>
+                    <input type="text" id="editExpenseDescription"
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 text-gray-700">
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <div class="w-full sm:w-2/5"> <label for="editExpenseUnitPrice" class="block text-base font-medium text-gray-700 mb-1">ราคาต่อหน่วย</label>
+                        <input type="number" id="editExpenseUnitPrice" min="0" step="0.01"
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 text-gray-700">
+                    </div>
+                    <div class="w-full sm:w-1/5">
+                        <label for="editExpenseQuantity" class="block text-base font-medium text-gray-700 mb-1">จำนวน (หน่วย)</label>
+                        <input type="number" id="editExpenseQuantity" min="1" step="1"
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 text-gray-700 mb-1">
+                        <div class="flex items-center justify-between w-full">
+                            <button id="editDecreaseQuantityBtn" class="bg-emerald-200 hover:bg-emerald-300 text-emerald-800 font-semibold py-1 px-2 rounded-full shadow-sm transition duration-200 text-sm">ลด</button>
+                            <button id="editIncreaseQuantityBtn" class="bg-emerald-200 hover:bg-emerald-300 text-emerald-800 font-semibold py-1 px-2 rounded-full shadow-sm transition duration-200 text-sm">เพิ่ม</button>
+                        </div>
+                    </div>
+                    <div class="w-full sm:w-2/5"> <label for="editExpenseAmount" class="block text-base font-medium text-gray-700 mb-1">จำนวนเงินรวม</label>
+                        <input type="number" id="editExpenseAmount"
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 text-gray-700" min="0" step="0.01" readonly>
+                    </div>
+                </div>
+                <div>
+                    <label for="editExpensePayerSelect" class="block text-base font-medium text-gray-700 mb-1">จ่ายโดย</label>
+                    <select id="editExpensePayerSelect"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 bg-white text-gray-700">
+                        <option value="">เลือกผู้จ่าย</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-base font-medium text-gray-700 mb-2">หารโดย</label>
+                    <div id="editSharersCheckboxes" class="space-y-2 max-h-40 overflow-y-auto pr-2 border border-gray-200 p-2 rounded-lg bg-gray-50">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="edit-sharer-all" class="form-checkbox h-5 w-5 text-emerald-600 rounded focus:ring-emerald-500">
+                            <label for="edit-sharer-all" class="ml-2 text-gray-700 text-base font-semibold">ทุกคน (All)</label>
+                        </div>
+                        </div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-4">
+                <button id="cancelEditExpenseBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    ยกเลิก
+                </button>
+                <button id="saveEditExpenseBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    บันทึกการเปลี่ยนแปลง
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="clearConfirmModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">ยืนยันการล้างข้อมูล</h3>
+            <p class="text-gray-700 mb-6">คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลทั้งหมด? การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+            <div class="flex justify-end gap-4">
+                <button id="cancelClearConfirmBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    ยกเลิก
+                </button>
+                <button id="confirmClearBtn" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                    ยืนยันการล้าง
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // Define a palette of distinct colors
+        const colorPalette = [
+            '#FF6347', // Tomato
+            '#4682B4', // SteelBlue
+            '#32CD32', // LimeGreen
+            '#FFD700', // Gold
+            '#9370DB', // MediumPurple
+            '#00CED1', // DarkTurquoise
+            '#FF69B4', // HotPink
+            '#8B4513', // SaddleBrown
+            '#708090', // SlateGray
+            '#20B2AA'  // LightSeaGreen
+        ];
+
+        // Array to store participant objects
+        let participants = [];
+        // Array to store expense objects
+        let expenses = [];
+        // Variable to store the ID of the expense being edited (if any)
+        let editingExpenseId = null;
+        // Variable to store the ID of the payer selected for a new expense
+        let selectedPayerIdForNewExpense = null;
+
+        let deferredPrompt; // Variable to store the beforeinstallprompt event
+
+        // DOM elements
+        const partyDateInput = document.getElementById('partyDateInput');
+        const partyLocationInput = document.getElementById('partyLocationInput');
+        const clearAllBtn = document.getElementById('clearAllBtn'); 
+        const participantNameInput = document.getElementById('participantNameInput');
+        const addParticipantBtn = document.getElementById('addParticipantBtn');
+        const participantsList = document.getElementById('participantsList');
+        const totalParticipantsSummary = document.getElementById('totalParticipantsSummary'); 
+        const totalExpensesAmountSummary = document.getElementById('totalExpensesAmountSummary'); 
+        const expenseDescriptionInput = document.getElementById('expenseDescriptionInput');
+        const expenseQuantityInput = document.getElementById('expenseQuantityInput');
+        const decreaseQuantityBtn = document.getElementById('decreaseQuantityBtn'); // New quantity button
+        const increaseQuantityBtn = document.getElementById('increaseQuantityBtn'); // New quantity button
+        const expenseUnitPriceInput = document.getElementById('expenseUnitPriceInput');
+        const expenseAmountInput = document.getElementById('expenseAmountInput');
+        const addExpenseBtn = document.getElementById('addExpenseBtn'); 
+
+        const predefinedExpensesButtonsContainer = document.getElementById('predefinedExpensesButtons'); 
+        // UPDATED: Reordered and added new predefined expenses
+        let predefinedExpenses = ['เบียร์สิงห์(โปร)', 'เบียร์สิงห์(ขวด)', 'น้ำเปล่า', 'โค้ก', 'น้ำแข็ง', 'หม่าล่า', 'เฟรนซ์ฟราย', 'เอ็นไก่ทอด', 'เม็ดมะม่วง', 'หมูมะนาว', 'ข้าวผัด', 'ต้มแซบ', 'ส้มตำ', 'ยำ']; 
+
+        const predefinedLocationsButtonsContainer = document.getElementById('predefinedLocationsButtons'); 
+        let predefinedLocations = ['วิสกี้', 'รื่นรมย์', '3 วัน 2 คืน', 'จุ๊ย', 'กลิ่น']; 
+
+        const predefinedAmountsButtonsContainer = document.getElementById('predefinedAmountsButtons'); 
+        let predefinedAmounts = [20, 25, 40, 50, 80, 85, 100, 209, 214, 229, 240]; 
+
+        const predefinedParticipantsButtonsContainer = document.getElementById('predefinedParticipantsButtons'); 
+        let predefinedParticipants = ['ต้น', 'เบิร์ด', 'เจแปน', 'พิดนุ', 'สตังค์', 'แนน', 'อ้ายแซม', 'โต้ง']; 
+
+        const payerButtonsContainer = document.getElementById('payerButtonsContainer');
+
+        const expensesList = document.getElementById('expensesList');
+        const summaryTableBody = document.getElementById('summaryTableBody');
+        const detailedSummary = document.getElementById('detailedSummary');
+        const notesInput = document.getElementById('notesInput'); 
+        
+        const printAllReportBtn = document.getElementById('printAllReportBtn');
+        const printPartyAndParticipantsBtn = document.getElementById('printPartyAndParticipantsBtn');
+        const printExpensesBtn = document.getElementById('printExpensesBtn');
+        const printSummaryBtn = document.getElementById('printSummaryBtn');
+
+        const manageListModal = document.getElementById('manageListModal');
+        const manageListModalTitle = document.getElementById('manageListModalTitle');
+        const modalListItemInput = document.getElementById('modalListItemInput');
+        const addModalListItemBtn = document.getElementById('addModalListItemBtn');
+        const modalListItemsContainer = document.getElementById('modalListItemsContainer');
+        const closeManageListModalBtn = document.getElementById('closeManageListModalBtn');
+
+        const manageLocationsBtn = document.getElementById('manageLocationsBtn');
+        const manageParticipantsBtn = document.getElementById('manageParticipantsBtn');
+        const manageExpensesBtn = document.getElementById('manageExpensesBtn');
+        const manageAmountsBtn = document.getElementById('manageAmountsBtn');
+
+        const payerSelectionModal = document.getElementById('payerSelectionModal');
+        const modalPayerSelect = document.getElementById('modalPayerSelect');
+        const cancelPayerSelectionBtn = document.getElementById('cancelPayerSelectionBtn');
+        const confirmPayerSelectionBtn = document = document.getElementById('confirmPayerSelectionBtn');
+
+        const editExpenseModal = document.getElementById('editExpenseModal');
+        const editExpenseDescriptionInput = document.getElementById('editExpenseDescription');
+        const editExpenseQuantityInput = document.getElementById('editExpenseQuantity');
+        const editDecreaseQuantityBtn = document.getElementById('editDecreaseQuantityBtn'); // New edit quantity button
+        const editIncreaseQuantityBtn = document.getElementById('editIncreaseQuantityBtn'); // New edit quantity button
+        const editExpenseUnitPriceInput = document.getElementById('editExpenseUnitPrice');
+        const editExpenseAmountInput = document.getElementById('editExpenseAmount');
+        const editExpensePayerSelect = document.getElementById('editExpensePayerSelect');
+        const editSharersCheckboxesContainer = document.getElementById('editSharersCheckboxes');
+        const editSharerAllCheckbox = document.getElementById('edit-sharer-all');
+        const cancelEditExpenseBtn = document.getElementById('cancelEditExpenseBtn');
+        const saveEditExpenseBtn = document.getElementById('saveEditExpenseBtn');
+
+        const clearConfirmModal = document.getElementById('clearConfirmModal');
+        const confirmClearBtn = document.getElementById('confirmClearBtn');
+        const cancelClearConfirmBtn = document.getElementById('cancelClearConfirmBtn');
+
+        // Removed toggleViewBtn
+        // const toggleViewBtn = document.getElementById('toggleViewBtn'); // New toggle view button
+        const decreaseFontSizeBtn = document.getElementById('decreaseFontSizeBtn'); // New font size button
+        const increaseFontSizeBtn = document.getElementById('increaseFontSizeBtn'); // New font size button
+        const installAppBtn = document.getElementById('installAppBtn'); // PWA install button
+
+
+        let currentManagedListArray = null;
+        let currentManagedListRenderFunction = null;
+        let currentManagedListType = '';
+        let currentManagedListStorageKey = ''; // To store the localStorage key for the current list
+
+        // Removed currentViewMode and LS_VIEW_MODE
+        // let currentViewMode = localStorage.getItem('partyExpenseSplitter_viewMode') || 'desktop'; // Changed default to 'desktop'
+        // const LS_VIEW_MODE = 'partyExpenseSplitter_viewMode'; // New LS key for view mode
+
+
+        // Font size settings
+        const fontSizes = [14, 16, 18, 20, 22, 24, 26, 28, 30]; // UPDATED: Max font size now 30px
+        const LS_FONT_SIZE_INDEX = 'partyExpenseSplitter_fontSizeIndex';
+        let currentFontSizeIndex = parseInt(localStorage.getItem(LS_FONT_SIZE_INDEX)) || 1; // Default to index 1 (16px)
+
+
+        // --- LocalStorage Functions ---
+        const LS_PARTY_DATE = 'partyExpenseSplitter_partyDate';
+        const LS_PARTY_LOCATION = 'partyExpenseSplitter_partyLocation';
+        const LS_PARTICIPANTS = 'partyExpenseSplitter_participants';
+        const LS_EXPENSES = 'partyExpenseSplitter_expenses';
+        const LS_NOTES = 'partyExpenseSplitter_notes';
+        const LS_PREDEFINED_LOCATIONS = 'partyExpenseSplitter_predefinedLocations';
+        const LS_PREDEFINED_PARTICIPANTS = 'partyExpenseSplitter_predefinedParticipants';
+        const LS_PREDEFINED_EXPENSES = 'partyExpenseSplitter_predefinedExpenses';
+        const LS_PREDEFINED_AMOUNTS = 'partyExpenseSplitter_predefinedAmounts';
+        // Removed LS_VIEW_MODE
+        // const LS_VIEW_MODE = 'partyExpenseSplitter_viewMode'; // New LS key for view mode
+
+        function savePartyInfo() {
+            localStorage.setItem(LS_PARTY_DATE, partyDateInput.value);
+            localStorage.setItem(LS_PARTY_LOCATION, partyLocationInput.value);
+        }
+
+        function loadPartyInfo() {
+            const savedDate = localStorage.getItem(LS_PARTY_DATE);
+            if (savedDate) {
+                partyDateInput.value = savedDate;
+            } else {
+                setDefaultDate(); // Set to today if nothing saved
+            }
+            const savedLocation = localStorage.getItem(LS_PARTY_LOCATION);
+            if (savedLocation) {
+                partyLocationInput.value = savedLocation;
+            }
+        }
+
+        function saveParticipants() {
+            localStorage.setItem(LS_PARTICIPANTS, JSON.stringify(participants));
+        }
+
+        function loadParticipants() {
+            const savedParticipants = localStorage.getItem(LS_PARTICIPANTS);
+            if (savedParticipants) {
+                participants = JSON.parse(savedParticipants);
+            }
+        }
+
+        function saveExpenses() {
+            localStorage.setItem(LS_EXPENSES, JSON.stringify(expenses));
+        }
+
+        function loadExpenses() {
+            const savedExpenses = localStorage.getItem(LS_EXPENSES);
+            if (savedExpenses) {
+                expenses = JSON.parse(savedExpenses);
+            }
+        }
+
+        function saveNotes() {
+            localStorage.setItem(LS_NOTES, notesInput.value);
+        }
+
+        function loadNotes() {
+            const savedNotes = localStorage.getItem(LS_NOTES);
+            if (savedNotes) {
+                notesInput.value = savedNotes;
+            }
+        }
+        
+        function savePredefinedList(key, listArray) {
+            localStorage.setItem(key, JSON.stringify(listArray));
+        }
+
+        function loadPredefinedList(key, defaultArray) {
+            const savedList = localStorage.getItem(key);
+            if (savedList) {
+                return JSON.parse(savedList);
+            }
+            return defaultArray; // Return default if nothing in localStorage
+        }
+
+        function loadAllData() {
+            loadPartyInfo();
+            loadParticipants();
+            loadExpenses();
+            loadNotes();
+            
+            predefinedLocations = loadPredefinedList(LS_PREDEFINED_LOCATIONS, predefinedLocations);
+            predefinedParticipants = loadPredefinedList(LS_PREDEFINED_PARTICIPANTS, predefinedParticipants);
+            // UPDATED: Ensure predefinedExpenses is loaded with the new order/items
+            predefinedExpenses = loadPredefinedList(LS_PREDEFINED_EXPENSES, ['เบียร์สิงห์(โปร)', 'เบียร์สิงห์(ขวด)', 'น้ำเปล่า', 'โค้ก', 'น้ำแข็ง', 'หม่าล่า', 'เฟรนซ์ฟราย', 'เอ็นไก่ทอด', 'เม็ดมะม่วง', 'หมูมะนาว', 'ข้าวผัด', 'ต้มแซบ', 'ส้มตำ', 'ยำ']); 
+            predefinedAmounts = loadPredefinedList(LS_PREDEFINED_AMOUNTS, predefinedAmounts);
+
+            // Removed currentViewMode load
+            // currentViewMode = localStorage.getItem(LS_VIEW_MODE) || 'desktop'; // Load view mode, default to 'desktop'
+            currentFontSizeIndex = parseInt(localStorage.getItem(LS_FONT_SIZE_INDEX)) || 1; // Default to index 1 (16px)
+            // Ensure font size index is within bounds of the new fontSizes array
+            if (currentFontSizeIndex >= fontSizes.length) {
+                currentFontSizeIndex = fontSizes.length - 1;
+            } else if (currentFontSizeIndex < 0) {
+                currentFontSizeIndex = 0;
+            }
+        }
+
+        /**
+         * Clears only the dynamic data (party info, participants, expenses, notes)
+         * but keeps the predefined lists in localStorage.
+         * UPDATED: Modified to keep predefined lists.
+         */
+        function clearAllStoredData() {
+            localStorage.removeItem(LS_PARTY_DATE);
+            localStorage.removeItem(LS_PARTY_LOCATION);
+            localStorage.removeItem(LS_PARTICIPANTS);
+            localStorage.removeItem(LS_EXPENSES);
+            localStorage.removeItem(LS_NOTES);
+            // Removed LS_VIEW_MODE clear
+            // localStorage.removeItem(LS_VIEW_MODE); // View mode is also dynamic state, can be reset or kept. Keeping for now.
+            localStorage.removeItem(LS_FONT_SIZE_INDEX); // Font size is also dynamic state, can be reset or kept. Keeping for now.
+            // Do NOT remove LS_PREDEFINED_LOCATIONS, LS_PREDEFINED_PARTICIPANTS, LS_PREDEFINED_EXPENSES, LS_PREDEFINED_AMOUNTS
+        }
+        // --- End LocalStorage Functions ---
+
+
+        /**
+         * Displays a temporary message to the user.
+         * @param {string} message - The message to display.
+         * @param {string} type - 'success' or 'error' for styling.
+         */
+        function showMessage(message, type) {
+            const messageBox = document.createElement('div');
+            messageBox.textContent = message;
+            messageBox.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg text-white z-50 transition-all duration-300 transform ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} translate-x-0 opacity-100`;
+            document.body.appendChild(messageBox);
+
+            setTimeout(() => {
+                messageBox.classList.add('translate-x-full', 'opacity-0');
+                messageBox.addEventListener('transitionend', () => messageBox.remove());
+            }, 3000); // Message disappears after 3 seconds
+        }
+
+        /**
+         * Sets the current date as the default value for the date input field.
+         */
+        function setDefaultDate() {
+            // Only set if partyDateInput is empty, to prevent overwriting loaded data
+            if (!partyDateInput.value) {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0'); 
+                const day = String(today.getDate()).padStart(2, '0');
+                partyDateInput.value = `${year}-${month}-${day}`;
+            }
+        }
+
+        /**
+         * Adds a new participant to the list.
+         * @param {string} nameToAdd - The name of the participant to add.
+         * @returns {boolean} - true if added successfully, false if name is a duplicate or empty.
+         */
+        function addParticipant(nameToAdd) {
+            const name = nameToAdd.trim();
+            if (name && !participants.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+                const colorIndex = participants.length % colorPalette.length;
+                const time = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+                participants.push({ id: Date.now(), name: name, color: colorPalette[colorIndex], timestamp: time }); 
+                saveParticipants(); // Save after adding
+                return true;
+            } else if (name) {
+                return false;
+            } else {
+                return false;
+            }
+        }
+
+        /**
+         * Removes a participant from the list.
+         * @param {number} id - The ID of the participant to remove.
+         */
+        function removeParticipant(id) {
+            const hasAssociatedExpenses = expenses.some(exp => exp.paidBy === id || exp.sharedBy.includes(id));
+
+            if (hasAssociatedExpenses) {
+                showMessage('ไม่สามารถลบผู้เข้าร่วมนี้ได้ เนื่องจากมีค่าใช้จ่ายที่เกี่ยวข้องอยู่', 'error');
+                return;
+            }
+
+            participants = participants.filter(p => p.id !== id);
+            saveParticipants(); // Save after removing
+            renderParticipants(); 
+            calculateSummary(); 
+            showMessage('ลบผู้เข้าร่วมสำเร็จ!', 'success');
+        }
+
+
+        /**
+         * Displays the list of participants in the UI.
+         */
+        function renderParticipants() {
+            participantsList.innerHTML = ''; 
+            participants.forEach(p => {
+                const participantDiv = document.createElement('div');
+                participantDiv.className = 'flex flex-col items-start justify-between p-3 rounded-lg border border-gray-200 shadow-sm text-gray-800 text-base';
+                participantDiv.innerHTML = `
+                    <div class="flex items-center w-full">
+                        <span class="inline-block w-4 h-4 rounded-full mr-2" style="background-color: ${p.color};"></span>
+                        <span class="flex-grow">${p.name} <span class="text-gray-500 text-sm ml-1">${p.timestamp}</span></span> <button data-id="${p.id}" class="remove-participant-btn text-red-500 hover:text-red-700 font-bold ml-4 transition duration-200">
+                            &times;
+                        </button>
+                    </div>
+                `;
+                participantsList.appendChild(participantDiv);
+            });
+            totalParticipantsSummary.textContent = `ผู้เข้าร่วมทั้งหมด: ${participants.length} คน`; 
+
+            document.querySelectorAll('.remove-participant-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const idToRemove = parseInt(e.target.dataset.id);
+                    removeParticipant(idToRemove);
+                });
+            });
+            updatePayerButtons(); 
+        }
+
+        function hexToRgb(hex) {
+            const bigint = parseInt(hex.slice(1), 16);
+            const r = (bigint >> 16) & 255;
+            const g = (bigint >> 8) & 255;
+            const b = bigint & 255;
+            return { r, g, b };
+        }
+
+        function getLuminance(hexColor) {
+            const { r, g, b } = hexToRgb(hexColor);
+            const r_lin = r / 255;
+            const g_lin = g / 255;
+            const b_lin = b / 255;
+            const srgbToLinear = (c) => (c <= 0.03928) ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+            const R = srgbToLinear(r_lin);
+            const G = srgbToLinear(g_lin);
+            const B = srgbToLinear(b_lin);
+            return (0.2126 * R + 0.7152 * G + 0.0722 * B);
+        }
+
+        function getTextColor(hexColor) {
+            const luminance = getLuminance(hexColor);
+            return luminance > 0.179 ? 'text-gray-800' : 'text-white';
+        }
+
+        /**
+         * Updates payer buttons with current participant names and their assigned colors.
+         */
+        function updatePayerButtons() {
+            payerButtonsContainer.innerHTML = '';
+            
+            participants.forEach(p => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = p.name;
+                button.dataset.id = p.id;
+
+                const textColorClass = getTextColor(p.color);
+                let buttonClass = `payer-button font-semibold py-0.5 px-2 rounded-full transition duration-200 shadow-sm border-2`; 
+
+                button.style.backgroundColor = p.color;
+                button.classList.add(textColorClass);
+
+                if (selectedPayerIdForNewExpense === p.id) {
+                    buttonClass += ` border-green-500`; 
+                    button.classList.remove('opacity-40'); 
+                } else {
+                    buttonClass += ` border-transparent opacity-40`; 
+                }
+                
+                button.className = buttonClass; 
+
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.payer-button').forEach(btn => {
+                        btn.classList.remove('border-green-500');
+                        btn.classList.add('border-transparent', 'opacity-40'); 
+                    });
+                    button.classList.add('border-green-500');
+                    button.classList.remove('opacity-40'); 
+                    selectedPayerIdForNewExpense = parseInt(button.dataset.id);
+                });
+                payerButtonsContainer.appendChild(button);
+            });
+
+            const modalPayerSelect = document.getElementById('modalPayerSelect');
+            if (modalPayerSelect) {
+                modalPayerSelect.innerHTML = '<option value="">เลือกผู้จ่าย</option>';
+                participants.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = p.name;
+                    modalPayerSelect.appendChild(option);
+                });
+                // UPDATED: Default select to the first participant if available
+                if (participants.length > 0) {
+                    modalPayerSelect.value = participants[0].id;
+                }
+            }
+
+            const editExpensePayerSelect = document.getElementById('editExpensePayerSelect');
+            if (editExpensePayerSelect) {
+                editExpensePayerSelect.innerHTML = '<option value="">เลือกผู้จ่าย</option>';
+                participants.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = p.name;
+                    editExpensePayerSelect.appendChild(option);
+                });
+            }
+        }
+
+
+        /**
+         * Handles adding a new expense.
+         */
+        async function handleAddExpense() {
+            const description = expenseDescriptionInput.value.trim();
+            const quantity = parseFloat(expenseQuantityInput.value) || 0; 
+            const unitPrice = parseFloat(expenseUnitPriceInput.value) || 0; 
+            const amount = quantity * unitPrice; 
+            let paidById = selectedPayerIdForNewExpense; 
+
+            if (!description || isNaN(quantity) || quantity <= 0 || isNaN(unitPrice) || unitPrice < 0) {
+                showMessage('โปรดกรอกรายละเอียดค่าใช้จ่ายให้ถูกต้อง (รายละเอียด, จำนวน, และราคาต่อหน่วยที่ถูกต้อง)', 'error');
+                return;
+            }
+            if (amount <= 0) {
+                showMessage('จำนวนเงินรวมต้องมากกว่า 0', 'error');
+                return;
+            }
+
+            if (!paidById) {
+                const modalPayerSelect = document.getElementById('modalPayerSelect');
+                if (modalPayerSelect) {
+                    modalPayerSelect.innerHTML = '<option value="">เลือกผู้จ่าย</option>';
+                    participants.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p.id;
+                        option.textContent = p.name;
+                        modalPayerSelect.appendChild(option);
+                    });
+                    // UPDATED: Default select to the first participant if available
+                    if (participants.length > 0) {
+                        modalPayerSelect.value = participants[0].id;
+                    }
+                }
+
+                payerSelectionModal.classList.remove('hidden');
+
+                return new Promise((resolve) => {
+                    const confirmHandler = () => {
+                        paidById = parseInt(modalPayerSelect.value);
+                        if (!paidById) {
+                            showMessage('โปรดเลือกผู้จ่าย', 'error');
+                            return;
+                        }
+                        payerSelectionModal.classList.add('hidden');
+                        confirmPayerSelectionBtn.removeEventListener('click', confirmHandler);
+                        cancelPayerSelectionBtn.removeEventListener('click', cancelHandler);
+                        resolve(paidById);
+                    };
+                    const cancelHandler = () => {
+                        payerSelectionModal.classList.add('hidden');
+                        confirmPayerSelectionBtn.removeEventListener('click', confirmHandler);
+                        cancelPayerSelectionBtn.removeEventListener('click', cancelHandler);
+                        resolve(null); 
+                    };
+                    confirmPayerSelectionBtn.addEventListener('click', confirmHandler);
+                    cancelPayerSelectionBtn.addEventListener('click', cancelHandler);
+                }).then(selectedIdFromModal => {
+                    if (selectedIdFromModal) {
+                        selectedPayerIdForNewExpense = selectedIdFromModal; 
+                        addExpenseWithSharers(description, quantity, unitPrice, amount, selectedIdFromModal);
+                    }
+                });
+            } else {
+                addExpenseWithSharers(description, quantity, unitPrice, amount, paidById);
+            }
+        }
+
+
+        /**
+         * Adds a new expense after selecting the payer and sharers.
+         * @param {string} description
+         * @param {number} quantity
+         * @param {number} unitPrice
+         * @param {number} amount
+         * @param {number} paidById
+         */
+        function addExpenseWithSharers(description, quantity, unitPrice, amount, paidById) {
+            const sharersModal = document.createElement('div');
+            sharersModal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4';
+            sharersModal.innerHTML = `
+                <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">ใครเป็นผู้หารค่าใช้จ่ายนี้?</h3>
+                    <div id="sharersCheckboxes" class="space-y-2 mb-6 max-h-60 overflow-y-auto pr-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="sharer-all" class="form-checkbox h-5 w-5 text-emerald-600 rounded focus:ring-emerald-500">
+                            <label for="sharer-all" class="ml-2 text-gray-700 text-base font-semibold">ทุกคน (All)</label>
+                        </div>
+                        </div>
+                    <div class="flex justify-end gap-4">
+                        <button id="cancelSharersBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200">
+                            ยกเลิก
+                        </button>
+                        <button id="confirmSharersBtn" class="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                            ยืนยัน
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(sharersModal);
+
+            const sharersCheckboxesContainer = sharersModal.querySelector('#sharersCheckboxes');
+            const allSharerCheckbox = sharersModal.querySelector('#sharer-all');
+
+            participants.forEach(p => {
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.className = 'flex items-center';
+                checkboxDiv.innerHTML = `
+                    <input type="checkbox" id="sharer-${p.id}" value="${p.id}" class="sharer-checkbox form-checkbox h-5 w-5 text-emerald-600 rounded focus:ring-emerald-500">
+                    <label for="sharer-${p.id}" class="ml-2 text-gray-700 text-base">${p.name}</label>
+                `;
+                sharersCheckboxesContainer.appendChild(checkboxDiv);
+            });
+
+            // UPDATED: Default "ทุกคน (All)" to checked and all individual sharers
+            allSharerCheckbox.checked = true;
+            sharersCheckboxesContainer.querySelectorAll('.sharer-checkbox').forEach(cb => {
+                cb.checked = true;
+            });
+
+            allSharerCheckbox.addEventListener('change', () => {
+                const isChecked = allSharerCheckbox.checked;
+                sharersCheckboxesContainer.querySelectorAll('.sharer-checkbox').forEach(cb => {
+                    cb.checked = isChecked;
+                });
+            });
+
+            sharersModal.querySelector('#cancelSharersBtn').addEventListener('click', () => {
+                sharersModal.remove();
+                resetExpenseForm(); 
+            });
+
+            sharersModal.querySelector('#confirmSharersBtn').addEventListener('click', () => {
+                const selectedSharers = Array.from(sharersCheckboxesContainer.querySelectorAll('.sharer-checkbox:checked'))
+                                            .map(checkbox => parseInt(checkbox.value));
+
+                if (selectedSharers.length === 0) {
+                    showMessage('โปรดเลือกผู้เข้าร่วมอย่างน้อยหนึ่งคนเพื่อหารค่าใช้จ่าย', 'error');
+                    return;
+                }
+
+                expenses.push({
+                    id: Date.now(), 
+                    description: description,
+                    quantity: quantity, 
+                    unitPrice: unitPrice, 
+                    amount: amount, 
+                    paidBy: paidById, 
+                    sharedBy: selectedSharers 
+                });
+                saveExpenses(); // Save after adding
+                showMessage('เพิ่มค่าใช้จ่ายสำเร็จ!', 'success');
+
+                sharersModal.remove(); 
+                resetExpenseForm(); 
+                renderExpenses();
+                calculateSummary();
+            });
+        }
+
+        /**
+         * Resets the expense form and buttons.
+         */
+        function resetExpenseForm() {
+            expenseDescriptionInput.value = '';
+            expenseQuantityInput.value = '1'; 
+            expenseUnitPriceInput.value = ''; 
+            expenseAmountInput.value = ''; 
+            selectedPayerIdForNewExpense = null; 
+            document.querySelectorAll('.payer-button').forEach(btn => {
+                btn.classList.remove('border-green-500'); 
+                btn.classList.add('border-transparent', 'opacity-40'); 
+            });
+        }
+
+        /**
+         * Updates the calculated total amount in the input field.
+         */
+        function updateCalculatedAmount() {
+            const quantity = parseFloat(expenseQuantityInput.value) || 0;
+            const unitPrice = parseFloat(expenseUnitPriceInput.value) || 0;
+            const calculatedAmount = quantity * unitPrice;
+            expenseAmountInput.value = calculatedAmount.toFixed(2);
+        }
+
+        /**
+         * Updates the calculated total amount in the edit modal input field.
+         */
+        function updateEditCalculatedAmount() {
+            const quantity = parseFloat(editExpenseQuantityInput.value) || 0;
+            const unitPrice = parseFloat(editExpenseUnitPriceInput.value) || 0;
+            const calculatedAmount = quantity * unitPrice;
+            editExpenseAmountInput.value = calculatedAmount.toFixed(2);
+        }
+
+        /**
+         * Updates the total expenses amount displayed in the bottom right of the expenses section.
+         */
+        function updateTotalExpensesAmountSummary() {
+            const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+            totalExpensesAmountSummary.textContent = `ค่าใช้จ่ายรวม: $${totalExpenses.toFixed(2)}`;
+        }
+
+        /**
+         * Displays the list of expenses in the UI.
+         */
+        function renderExpenses() {
+            expensesList.innerHTML = ''; 
+            let itemNumber = 1; 
+            expenses.forEach(exp => {
+                const payer = participants.find(p => p.id === exp.paidBy);
+                const payerName = payer?.name || 'ไม่ทราบ';
+                const payerColor = payer?.color || '#CCCCCC'; 
+
+                const sharerCount = exp.sharedBy.length;
+                const sharePerPerson = sharerCount > 0 ? (exp.amount / sharerCount).toFixed(2) : '0.00';
+
+                const sharerNamesHtml = exp.sharedBy.map(id => {
+                    const sharer = participants.find(p => p.id === id);
+                    return sharer ? `<span class="inline-flex items-center"><span class="inline-block w-3 h-3 rounded-full mr-1" style="background-color: ${sharer.color};"></span>${sharer.name}</span>` : 'Unknown';
+                }).join(', ');
+
+                const expenseDiv = document.createElement('div');
+                expenseDiv.className = 'p-2 text-gray-800 text-base border-b border-gray-200'; 
+                expenseDiv.innerHTML = `
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                        <span class="font-semibold flex-shrink-0">${itemNumber}. ${exp.description}</span>
+                        <div class="flex flex-col sm:flex-row sm:items-center text-sm sm:ml-4 mt-1 sm:mt-0">
+                            <p class="mr-2 pr-2 border-r border-gray-300"><b>จ่ายโดย:</b> <span class="font-medium inline-flex items-center"><span class="inline-block w-3 h-3 rounded-full mr-1" style="background-color: ${payerColor};"></span>${payerName}</span></p>
+                            <p class="mr-2 sm:ml-0 mt-1 sm:mt-0 pl-2"><b>หารโดย:</b> <span class="font-medium">${sharerNamesHtml}</span></p>
+                        </div>
+                        <div class="flex flex-col items-end space-y-1 mt-2 sm:mt-0 sm:ml-auto">
+                            <div class="flex items-center space-x-2 w-full justify-end">
+                                <span class="text-base font-bold text-gray-700">$${exp.amount.toFixed(2)}</span>
+                                <div class="flex gap-1">
+                                    <button data-id="${exp.id}" class="edit-expense-btn bg-indigo-500 hover:bg-indigo-600 text-white text-sm py-1.5 px-2.5 rounded-md transition duration-200">
+                                        แก้ไข
+                                    </button>
+                                    <button data-id="${exp.id}" class="remove-expense-btn text-red-500 hover:text-red-700 font-bold text-sm py-1.5 px-2.5 rounded-md transition duration-200">
+                                        ลบ
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="text-right w-full text-sm font-medium text-blue-600">ส่วนแบ่งต่อคน (${sharerCount} คน): <span class="font-bold">$${sharePerPerson}</span></p>
+                            <p class="text-right w-full text-sm text-gray-500">(${exp.quantity} หน่วย x $${exp.unitPrice.toFixed(2)}/หน่วย)</p>
+                        </div>
+                    </div>
+                `;
+                expensesList.appendChild(expenseDiv);
+                itemNumber++; 
+            });
+            updateTotalExpensesAmountSummary(); 
+            document.querySelectorAll('.remove-expense-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const idToRemove = parseInt(e.target.dataset.id);
+                    removeExpense(idToRemove);
+                });
+            });
+
+            document.querySelectorAll('.edit-expense-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const idToEdit = parseInt(e.target.dataset.id);
+                    editExpense(idToEdit);
+                });
+            });
+        }
+
+        /**
+         * Removes an expense from the list.
+         * @param {number} id - The ID of the expense to remove.
+         */
+        function removeExpense(id) {
+            expenses = expenses.filter(exp => exp.id !== id);
+            saveExpenses(); // Save after removing
+            renderExpenses();
+            calculateSummary();
+            showMessage('ลบค่าใช้จ่ายสำเร็จ!', 'success');
+        }
+
+        /**
+         * Loads expense data into the edit form in the modal.
+         * @param {number} id - The ID of the expense to edit.
+         */
+        function editExpense(id) {
+            const expenseToEdit = expenses.find(exp => exp.id === id);
+            if (expenseToEdit) {
+                editingExpenseId = id; 
+
+                editExpenseDescriptionInput.value = expenseToEdit.description;
+                editExpenseQuantityInput.value = expenseToEdit.quantity; 
+                editExpenseUnitPriceInput.value = expenseToEdit.unitPrice; 
+                editExpenseAmountInput.value = expenseToEdit.amount.toFixed(2); 
+                editExpensePayerSelect.value = expenseToEdit.paidBy;
+
+                editSharersCheckboxesContainer.innerHTML = `
+                    <div class="flex items-center">
+                        <input type="checkbox" id="edit-sharer-all" class="form-checkbox h-5 w-5 text-emerald-600 rounded focus:ring-emerald-500">
+                            <label for="edit-sharer-all" class="ml-2 text-gray-700 text-base font-semibold">ทุกคน (All)</label>
+                        </div>
+                `;
+                participants.forEach(p => {
+                    const checkboxDiv = document.createElement('div');
+                    checkboxDiv.className = 'flex items-center';
+                    checkboxDiv.innerHTML = `
+                        <input type="checkbox" id="edit-sharer-${p.id}" value="${p.id}" class="edit-sharer-checkbox form-checkbox h-5 w-5 text-emerald-600 rounded focus:ring-emerald-500">
+                        <label for="edit-sharer-${p.id}" class="ml-2 text-gray-700 text-base">${p.name}</label>
+                    `;
+                    editSharersCheckboxesContainer.appendChild(checkboxDiv);
+                });
+
+                editSharersCheckboxesContainer.querySelector('#edit-sharer-all').addEventListener('change', (e) => {
+                    const isChecked = e.target.checked;
+                    editSharersCheckboxesContainer.querySelectorAll('.edit-sharer-checkbox').forEach(cb => {
+                        cb.checked = isChecked;
+                    });
+                });
+
+                expenseToEdit.sharedBy.forEach(sharerId => { // Apply checked state after all checkboxes are rendered
+                    const checkbox = editSharersCheckboxesContainer.querySelector(`#edit-sharer-${sharerId}`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+
+                editExpenseModal.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Calculates and displays the summary table and details.
+         */
+        function calculateSummary() {
+            const participantSummary = {}; 
+
+            // Initialize summary for all current participants
+            participants.forEach(p => {
+                participantSummary[p.id] = {
+                    name: p.name,
+                    totalShare: 0,
+                    amountPaid: 0,
+                    owedExpenses: [], 
+                    balance: 0,
+                    color: p.color 
+                };
+            });
+
+            // Calculate shares and payments based on current expenses
+            expenses.forEach(exp => {
+                const sharerCount = exp.sharedBy.length;
+                if (sharerCount > 0) {
+                    const sharePerPerson = exp.amount / sharerCount;
+
+                    exp.sharedBy.forEach(sharerId => {
+                        if (participantSummary[sharerId]) { 
+                            participantSummary[sharerId].totalShare += sharePerPerson;
+                            participantSummary[sharerId].owedExpenses.push({
+                                description: exp.description,
+                                originalAmount: exp.amount,
+                                sharedAmount: sharePerPerson.toFixed(2) 
+                            });
+                        }
+                    });
+                }
+
+                if (participantSummary[exp.paidBy]) { 
+                    participantSummary[exp.paidBy].amountPaid += exp.amount;
+                }
+            });
+
+            // Calculate balance for each participant
+            Object.values(participantSummary).forEach(summary => {
+                summary.balance = summary.amountPaid - summary.totalShare;
+            });
+
+            // Render Summary Table
+            summaryTableBody.innerHTML = '';
+            participants.forEach(p => { // Ensure participants are in order from the 'participants' array
+                const summary = participantSummary[p.id];
+                if (summary) {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b border-gray-200 hover:bg-gray-100';
+                    const balanceClass = summary.balance >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold';
+                    const balanceText = summary.balance >= 0 ? `ได้คืน $${summary.balance.toFixed(2)}` : `ยอดที่ต้องจ่าย $${Math.abs(summary.balance).toFixed(2)}`;
+                    const amountPaidClass = summary.amountPaid > 0 ? 'text-blue-500 font-semibold' : 'text-gray-700';
+
+                    row.innerHTML = `
+                        <td class="py-3 px-6 text-left whitespace-nowrap inline-flex items-center">
+                            <span class="inline-block w-4 h-4 rounded-full mr-2" style="background-color: ${summary.color};"></span>
+                            ${summary.name}
+                        </td>
+                        <td class="py-3 px-6 text-left">$${summary.totalShare.toFixed(2)}</td>
+                        <td class="py-3 px-6 text-left ${amountPaidClass}">$${summary.amountPaid.toFixed(2)}</td>
+                        <td class="py-3 px-6 text-left ${balanceClass}">${balanceText}</td>
+                    `;
+                    summaryTableBody.appendChild(row);
+                }
+            });
+
+            // Render Detailed Summary
+            detailedSummary.innerHTML = '';
+            participants.forEach(p => { // Ensure participants are in order from the 'participants' array
+                const summary = participantSummary[p.id];
+                if (summary) {
+                    const detailDiv = document.createElement('div');
+                    detailDiv.className = 'p-4 rounded-lg shadow-sm text-gray-800'; 
+                    
+                    const balanceClass = summary.balance >= 0 ? 'text-green-600' : 'text-red-600';
+                    const balanceText = summary.balance >= 0 ? `ได้คืน ${summary.balance.toFixed(2)}` : `ยอดที่ต้องจ่าย ${Math.abs(summary.balance).toFixed(2)}`;
+                    const amountPaidClass = summary.amountPaid > 0 ? 'text-blue-500 font-bold' : 'text-gray-700';
+
+                    detailDiv.innerHTML = `
+                        <h3 class="text-xl font-semibold mb-3 flex items-center justify-between">
+                            <span class="inline-flex items-center">
+                                <span class="inline-block w-4 h-4 rounded-full mr-2" style="background-color: ${summary.color};"></span>
+                                ${summary.name}
+                            </span>
+                            <div class="flex flex-col items-end text-base font-medium text-gray-600">
+                                <span>ส่วนแบ่งรวม: $${summary.totalShare.toFixed(2)}</span>
+                                <span class="${amountPaidClass} mt-1">จำนวนเงินที่จ่ายไป (สำรองจ่าย): $${summary.amountPaid.toFixed(2)}</span>
+                                <span class="${balanceClass} font-bold mt-1">ยอดคงเหลือ: $${balanceText}</span>
+                            </div>
+                        </h3>
+                        
+                        <h4 class="font-medium mt-2 mb-2 text-gray-600">รายการที่ต้องจ่าย:</h4> ${summary.owedExpenses.length > 0 ? `
+                            <ul class="list-disc list-inside text-base space-y-1">
+                                ${summary.owedExpenses.map(item => `
+                                    <li>${item.description} (เดิม: $${item.originalAmount.toFixed(2)}) - <span class="text-blue-600 font-semibold">ส่วนแบ่งของคุณ:</span> <span class="font-semibold text-blue-600">$${item.sharedAmount}</span></li>
+                                `).join('')}
+                            </ul>
+                        ` : '<p class="text-base italic">ไม่มีรายการที่ต้องจ่ายเฉพาะเจาะจง</p>'}
+                    `;
+                    detailedSummary.appendChild(detailDiv);
+                }
+            });
+        }
+
+        /**
+         * Clears all data in the program.
+         */
+        function clearAllData() {
+            clearConfirmModal.classList.remove('hidden');
+        }
+
+        /**
+         * Confirms clearing all data.
+         * UPDATED: Now only clears dynamic data, keeps predefined lists.
+         */
+        function confirmClearAll() {
+            partyDateInput.value = '';
+            partyLocationInput.value = '';
+            participantNameInput.value = '';
+            expenseDescriptionInput.value = '';
+            expenseQuantityInput.value = '1'; 
+            expenseUnitPriceInput.value = ''; 
+            expenseAmountInput.value = ''; 
+            notesInput.value = '';
+
+            participants = [];
+            expenses = [];
+            selectedPayerIdForNewExpense = null; 
+
+            // Predefined lists are NOT reset to hardcoded defaults here,
+            // they retain their state from localStorage (which is not cleared for them).
+            // This ensures user-added/removed predefined items persist across clears.
+
+            clearAllStoredData(); // Clear only dynamic data from localStorage
+
+            renderAll(); // Re-render everything
+            setDefaultDate(); 
+            showMessage('ล้างข้อมูลทั้งหมดสำเร็จ!', 'success');
+            clearConfirmModal.classList.add('hidden'); 
+        }
+
+        /**
+         * Helper to manage UI state (disable buttons, hide/show notes input) during capture.
+         * @param {boolean} isDisabled - true to disable/hide, false to enable/show
+         */
+        function setCaptureState(isDisabled) {
+            printAllReportBtn.disabled = isDisabled;
+            printPartyAndParticipantsBtn.disabled = isDisabled;
+            printExpensesBtn.disabled = isDisabled;
+            printSummaryBtn.disabled = isDisabled;
+
+            // Hide all buttons except the ones in modals and clear all button
+            const buttonsToHide = document.querySelectorAll('button:not(#clearAllBtn):not(#addParticipantBtn):not(#addExpenseBtn):not(.remove-participant-btn):not(.edit-expense-btn):not(.remove-expense-btn):not(#manageLocationsBtn):not(#manageParticipantsBtn):not(#manageExpensesBtn):not(#manageAmountsBtn):not(#decreaseFontSizeBtn):not(#increaseFontSizeBtn):not(#installAppBtn)');
+            buttonsToHide.forEach(btn => btn.style.display = isDisabled ? 'none' : '');
+
+            // Notes input handling is now solely within onclone for print capture
+        }
+
+        /**
+         * Generic function to capture an element and trigger download.
+         * @param {HTMLElement} element - The DOM element to capture.
+         * @param {string} filenamePrefix - Prefix for the downloaded filename.
+         * @param {object} [html2canvasOptions={}] - Additional options for html2canvas.
+         * @param {object} [jsPDFOptions={}] - Additional options for jsPDF (only for PDF).
+         * @param {string} [outputType='png'] - 'png' or 'pdf'.
+         */
+        async function captureAndDownload(element, filenamePrefix, html2canvasOptions = {}, jsPDFOptions = {}, outputType = 'png') {
+            showMessage(`กำลังสร้างรายงาน ${filenamePrefix.replace(/_/g, ' ')}... โปรดรอสักครู่`, 'success');
+            setCaptureState(true);
+
+            const defaultHtml2canvasOptions = {
+                scale: 2,
+                useCORS: true,
+                windowWidth: element.scrollWidth,
+                windowHeight: element.scrollHeight,
+                onclone: (clonedDoc) => {
+                    clonedDoc.body.style.overflow = 'hidden';
+                    // Hide message boxes that might be on screen
+                    const messageBoxes = clonedDoc.querySelectorAll('.fixed.top-4.right-4');
+                    messageBoxes.forEach(box => box.style.display = 'none');
+
+                    // Find the main content area in the cloned document
+                    const mainContentArea = clonedDoc.getElementById('app-container') || clonedDoc.querySelector('.temp-print-container');
+
+                    if (mainContentArea) {
+                        // Apply desktop-like styles to the main content area
+                        mainContentArea.style.maxWidth = '1024px'; // Force desktop width
+                        mainContentArea.style.width = '100%';
+                        mainContentArea.style.margin = 'auto'; // Center the content
+                        mainContentArea.style.boxShadow = 'none'; // Remove shadows for print
+                        mainContentArea.style.border = 'none'; // Remove borders for print
+                        mainContentArea.style.borderRadius = '0'; // Remove rounded corners for print
+                        mainContentArea.style.padding = '2rem'; // Add some padding for readability
+                        mainContentArea.style.backgroundColor = 'white'; // Ensure background is white
+
+                        // Ensure all responsive elements are laid out for desktop
+                        // This is a more general approach to remove mobile-specific flex-direction
+                        clonedDoc.querySelectorAll('.flex-col.sm\\:flex-row, .flex-col.md\\:flex-row, .flex-col.lg\\:flex-row').forEach(el => {
+                            el.classList.remove('flex-col');
+                            el.classList.add('flex-row');
+                        });
+                        // Ensure elements that might be hidden on mobile are visible
+                        clonedDoc.querySelectorAll('.hidden.sm\\:block, .hidden.md\\:block, .hidden.lg\\:block').forEach(el => {
+                            el.classList.remove('hidden');
+                            el.classList.add('block');
+                        });
+                        // Ensure table overflow is visible
+                        const summaryTableContainer = clonedDoc.getElementById('summaryTableContainer');
+                        if (summaryTableContainer) {
+                            summaryTableContainer.style.overflowX = 'visible';
+                        }
+
+                        // Force participant list to display in a single row for print (if enough space)
+                        const participantsListClone = clonedDoc.getElementById('participantsList');
+                        if (participantsListClone) {
+                            participantsListClone.style.display = 'flex';
+                            participantsListClone.style.flexWrap = 'wrap';
+                            participantsListClone.style.gap = '0.5rem';
+                            participantsListClone.style.justifyContent = 'flex-start'; // Align to start
+                            participantsListClone.querySelectorAll('div').forEach(pDiv => {
+                                pDiv.style.flexShrink = '0';
+                                pDiv.style.flexBasis = 'auto'; // Allow content to dictate width
+                                pDiv.style.marginRight = '0.5rem'; // Add some spacing
+                            });
+                        }
+
+                        // Force expense list items to display in a single row for print
+                        const expensesListClone = clonedDoc.getElementById('expensesList');
+                        if (expensesListClone) {
+                            expensesListClone.querySelectorAll('.flex.flex-col.sm\\:flex-row').forEach(expenseDiv => {
+                                expenseDiv.classList.remove('flex-col');
+                                expenseDiv.classList.add('flex-row', 'items-center', 'justify-between');
+                                // Ensure description takes less space and other elements are aligned
+                                const descriptionSpan = expenseDiv.querySelector('.font-semibold.flex-shrink-0');
+                                if (descriptionSpan) {
+                                    descriptionSpan.style.flexBasis = '30%'; // Adjust as needed
+                                }
+                                const detailsDiv = expenseDiv.querySelector('.flex.flex-col.sm\\:flex-row.sm\\:items-center');
+                                if (detailsDiv) {
+                                    detailsDiv.classList.remove('flex-col');
+                                    detailsDiv.classList.add('flex-row');
+                                    detailsDiv.style.flexBasis = '40%'; // Adjust as needed
+                                }
+                                const amountAndButtonsDiv = expenseDiv.querySelector('.flex.flex-col.items-end');
+                                if (amountAndButtonsDiv) {
+                                    amountAndButtonsDiv.style.flexBasis = '30%'; // Adjust as needed
+                                    amountAndButtonsDiv.classList.remove('items-end');
+                                    amountAndButtonsDiv.classList.add('items-center'); // Center align for print
+                                }
+                            });
+                        }
+
+                        // Force detailed summary items to display in a more compact way for print
+                        const detailedSummaryClone = clonedDoc.getElementById('detailedSummary');
+                        if (detailedSummaryClone) {
+                            detailedSummaryClone.querySelectorAll('.flex.flex-col.items-end').forEach(detailDiv => {
+                                detailDiv.classList.remove('flex-col', 'items-end');
+                                detailDiv.classList.add('flex-row', 'items-center', 'gap-4'); // Make it horizontal
+                                detailDiv.style.justifyContent = 'flex-end';
+                            });
+                        }
+
+                        // Apply print-specific styles to hide interactive elements
+                        const elementsToHideInPrint = clonedDoc.querySelectorAll('.manage-button, .add-button, .remove-button, .edit-button, .modal-overlay, .modal-content, .hidden-for-print, #toggleViewBtn, #clearAllBtn, #decreaseFontSizeBtn, #increaseFontSizeBtn, #editDecreaseQuantityBtn, #editIncreaseQuantityBtn, #installAppBtn');
+                        elementsToHideInPrint.forEach(el => {
+                            el.style.display = 'none';
+                        });
+
+                        // Handle notes input for print: replace textarea with its text content
+                        const notesInputClone = clonedDoc.getElementById('notesInput');
+                        if (notesInputClone) {
+                            const notesText = notesInputClone.value;
+                            const notesDisplayDiv = clonedDoc.createElement('div');
+                            notesDisplayDiv.className = 'p-3 border border-gray-300 rounded-lg bg-white text-gray-700 whitespace-pre-wrap';
+                            notesDisplayDiv.textContent = notesText || 'ไม่มีหมายเหตุ';
+                            notesInputClone.parentNode.replaceChild(notesDisplayDiv, notesInputClone);
+                        }
+
+                        // Ensure predefined buttons are hidden
+                        const predefinedButtonsContainers = clonedDoc.querySelectorAll('#predefinedLocationsButtons, #predefinedParticipantsButtons, #predefinedExpensesButtons, #predefinedAmountsButtons');
+                        predefinedButtonsContainers.forEach(container => {
+                            container.style.display = 'none';
+                        });
+
+                        // Ensure input fields are read-only and styled as text
+                        const inputsToStyle = clonedDoc.querySelectorAll('input[type="text"], input[type="date"], input[type="number"], textarea');
+                        inputsToStyle.forEach(input => {
+                            input.setAttribute('readonly', 'true');
+                            input.style.border = 'none';
+                            input.style.backgroundColor = 'transparent';
+                            input.style.padding = '0';
+                            input.style.boxShadow = 'none';
+                        });
+
+                        // Ensure select elements are styled as text
+                        const selectsToStyle = clonedDoc.querySelectorAll('select');
+                        selectsToStyle.forEach(select => {
+                            select.style.border = 'none';
+                            select.style.backgroundColor = 'transparent';
+                            select.style.padding = '0';
+                            select.style.appearance = 'none'; // Remove default select arrow
+                        });
+                    }
+                }
+            };
+
+            const finalHtml2canvasOptions = { ...defaultHtml2canvasOptions, ...html2canvasOptions };
+
+            try {
+                if (outputType === 'png') {
+                    const canvas = await html2canvas(element, finalHtml2canvasOptions);
+                    const imgData = canvas.toDataURL('image/png');
+                    const a = document.createElement('a');
+                    a.href = imgData;
+
+                    const partyDate = partyDateInput.value || 'ไม่ระบุวันที่';
+                    const partyLocation = partyLocationInput.value || 'ไม่ระบุสถานที่';
+                    const filename = `${filenamePrefix}_${partyDate}_${partyLocation.replace(/\s/g, '_')}.png`;
+
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+
+                    showMessage(`บันทึกรายงาน ${filenamePrefix.replace(/_/g, ' ')} สำเร็จ!`, 'success');
+                } else if (outputType === 'pdf') {
+                    const defaultJsPDFOptions = {
+                        margin: [0.5, 0.5, 0.5, 0.5],
+                        filename: '', // Will be set below
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: finalHtml2canvasOptions,
+                        jsPDF: {
+                            unit: 'in',
+                            format: 'a4',
+                            orientation: 'portrait',
+                            compress: true
+                        },
+                        pagebreak: {
+                            mode: ['avoid-all']
+                        }
+                    };
+
+                    const partyDate = partyDateInput.value || 'ไม่ระบุวันที่';
+                    const partyLocation = partyLocationInput.value || 'ไม่ระบุสถานที่';
+                    const pdfFilename = `Party_Expense_Report_${partyDate}_${partyLocation.replace(/\s/g, '_')}.pdf`;
+                    defaultJsPDFOptions.filename = pdfFilename;
+
+                    const finalJsPDFOptions = { ...defaultJsPDFOptions, ...jsPDFOptions };
+
+                    await html2pdf().set(finalJsPDFOptions).from(element).save();
+                    showMessage('บันทึกรายงานเป็น PDF สำเร็จ!', 'success');
+                }
+
+            } catch (error) {
+                console.error(`เกิดข้อผิดพลาดในการสร้างรายงาน ${filenamePrefix.replace(/_/g, ' ')}:`, error);
+                showMessage(`เกิดข้อผิดพลาดในการสร้างรายงาน ${filenamePrefix.replace(/_/g, ' ')} โปรดลองอีกครั้ง`, 'error');
+            } finally {
+                setCaptureState(false);
+            }
+        }
+
+        /**
+         * Prints/saves the entire report as PNG.
+         */
+        async function printAllReport() {
+            const appContainer = document.getElementById('app-container');
+            await captureAndDownload(appContainer, 'Party_Expense_Report_All', {}, {}, 'png');
+        }
+
+        /**
+         * Saves Party Info and Participants sections as PNG.
+         */
+        async function printPartyAndParticipantsReport() {
+            const partyInfo = document.getElementById('partyInfoSection');
+            const participants = document.getElementById('participantsSection');
+
+            const tempContainer = document.createElement('div');
+            tempContainer.className = 'temp-print-container'; // Add class for onclone to target
+            tempContainer.style.width = '100%';
+            tempContainer.style.backgroundColor = 'white'; 
+            tempContainer.style.padding = '2rem'; 
+            tempContainer.style.boxSizing = 'border-box'; 
+            tempContainer.style.borderRadius = '0.75rem'; 
+            tempContainer.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'; 
+            tempContainer.style.maxWidth = '1024px'; // Force desktop width
+            tempContainer.style.margin = 'auto'; // Center it
+
+            const clonedPartyInfo = partyInfo.cloneNode(true);
+            const clonedParticipants = participants.cloneNode(true);
+
+            tempContainer.appendChild(clonedPartyInfo);
+            tempContainer.appendChild(clonedParticipants); 
+
+            document.body.appendChild(tempContainer); 
+
+            await captureAndDownload(tempContainer, 'Party_Info_and_Participants', {}, {}, 'png');
+
+            tempContainer.remove(); 
+        }
+
+        /**
+         * Saves Expenses section as PNG.
+         */
+        async function printExpensesReport() {
+            const expensesSection = document.getElementById('expensesSection');
+            await captureAndDownload(expensesSection, 'Party_Expenses', {}, {}, 'png');
+        }
+
+        /**
+         * Saves Summary section as PNG.
+         */
+        async function printSummaryReport() {
+            const summarySection = document.getElementById('summarySection');
+            await captureAndDownload(summarySection, 'Party_Summary', {}, {}, 'png');
+        }
+
+        /**
+         * Render predefined expense buttons
+         */
+        function renderPredefinedExpenseButtons() {
+            predefinedExpensesButtonsContainer.innerHTML = '';
+            predefinedExpenses.forEach(item => {
+                const button = document.createElement('button');
+                button.type = 'button'; 
+                button.textContent = item;
+                button.className = 'bg-emerald-200 hover:bg-emerald-300 text-emerald-800 text-sm font-semibold py-1 px-3 rounded-full transition duration-200 shadow-sm';
+                button.addEventListener('click', () => {
+                    expenseDescriptionInput.value = item;
+                });
+                predefinedExpensesButtonsContainer.appendChild(button);
+            });
+        }
+
+        /**
+         * Render predefined location buttons
+         */
+        function renderPredefinedLocationButtons() {
+            predefinedLocationsButtonsContainer.innerHTML = '';
+            predefinedLocations.forEach(item => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = item;
+                button.className = 'bg-blue-200 hover:bg-blue-300 text-blue-800 text-sm font-semibold py-1 px-3 rounded-full transition duration-200 shadow-sm';
+                button.addEventListener('click', () => {
+                    partyLocationInput.value = item;
+                    savePartyInfo(); // Save when a predefined location is clicked
+                });
+                predefinedLocationsButtonsContainer.appendChild(button);
+            });
+        }
+
+        /**
+         * Render predefined amount buttons
+         * UPDATED: Sorts amounts before rendering.
+         */
+        function renderPredefinedAmountButtons() {
+            predefinedAmountsButtonsContainer.innerHTML = '';
+            predefinedAmounts.sort((a, b) => a - b); // Sort from least to greatest
+            predefinedAmounts.forEach(amount => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = amount.toString();
+                button.className = 'bg-emerald-200 hover:bg-emerald-300 text-emerald-800 text-sm font-semibold py-1 px-3 rounded-full transition duration-200 shadow-sm';
+                button.addEventListener('click', () => {
+                    expenseUnitPriceInput.value = amount; 
+                    updateCalculatedAmount(); 
+                });
+                predefinedAmountsButtonsContainer.appendChild(button);
+            });
+        }
+
+        /**
+         * Render predefined participant buttons
+         */
+        function renderPredefinedParticipantButtons() {
+            predefinedParticipantsButtonsContainer.innerHTML = '';
+            predefinedParticipants.forEach(name => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = name;
+                button.className = 'bg-purple-200 hover:bg-purple-300 text-purple-800 text-sm font-semibold py-1 px-3 rounded-full transition duration-200 shadow-sm';
+                button.addEventListener('click', () => {
+                    if (addParticipant(name)) {
+                        participantNameInput.value = ''; 
+                        showMessage(`เพิ่มผู้เข้าร่วม ${name} สำเร็จ!`, 'success');
+                    } else {
+                        showMessage(`มีผู้เข้าร่วมชื่อ ${name} อยู่แล้ว`, 'error');
+                    }
+                    renderParticipants(); 
+                    calculateSummary(); 
+                });
+                predefinedParticipantsButtonsContainer.appendChild(button);
+            });
+        }
+
+        /**
+         * Opens the generic modal for managing predefined lists.
+         * @param {string} title - The title for the modal.
+         * @param {Array} listArray - The actual array to manage (e.g., predefinedLocations).
+         * @param {Function} renderFunction - The function to call to re-render the main section's buttons.
+         * @param {string} storageKey - The localStorage key for this list.
+         * @param {string} inputType - 'text' or 'number' for the input field.
+         */
+        function openManageListModal(title, listArray, renderFunction, storageKey, inputType = 'text') {
+            manageListModalTitle.textContent = title;
+            currentManagedListArray = listArray;
+            currentManagedListRenderFunction = renderFunction;
+            currentManagedListStorageKey = storageKey; // Store the key
+            currentManagedListType = inputType;
+
+            modalListItemInput.value = ''; 
+            modalListItemInput.type = inputType; 
+            modalListItemInput.placeholder = inputType === 'number' ? 'เพิ่มจำนวนเงินใหม่' : 'เพิ่มรายการใหม่';
+
+            renderModalListItems();
+            manageListModal.classList.remove('hidden');
+        }
+
+        /**
+         * Renders the items in the generic list management modal.
+         */
+        function renderModalListItems() {
+            modalListItemsContainer.innerHTML = '';
+            currentManagedListArray.forEach((item, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex items-center justify-between bg-white p-2 rounded-md shadow-sm border border-gray-200';
+                itemDiv.innerHTML = `
+                    <span class="text-gray-800">${item}</span>
+                    <button data-index="${index}" class="remove-modal-list-item-btn text-red-500 hover:text-red-700 font-bold ml-4 transition duration-200">
+                        &times;
+                    </button>
+                `;
+                modalListItemsContainer.appendChild(itemDiv);
+            });
+
+            modalListItemsContainer.querySelectorAll('.remove-modal-list-item-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const indexToRemove = parseInt(e.target.dataset.index);
+                    removeModalListItem(indexToRemove);
+                });
+            });
+        }
+
+        /**
+         * Adds an item to the currently managed list.
+         * UPDATED: Sorts amounts after adding if it's a number list.
+         */
+        function addModalListItem() {
+            let newItem = modalListItemInput.value.trim();
+
+            if (currentManagedListType === 'number') {
+                newItem = parseFloat(newItem);
+                if (isNaN(newItem) || newItem <= 0) {
+                    showMessage('โปรดป้อนจำนวนเงินที่ถูกต้อง', 'error');
+                    return;
+                }
+            } else { 
+                if (!newItem) {
+                    showMessage('โปรดป้อนรายการ', 'error');
+                    return;
+                }
+            }
+
+            const isDuplicate = currentManagedListArray.some(existingItem => {
+                if (currentManagedListType === 'text') {
+                    return String(existingItem).toLowerCase() === String(newItem).toLowerCase();
+                } else { 
+                    return existingItem === newItem;
+                }
+            });
+
+            if (isDuplicate) {
+                showMessage('รายการนี้มีอยู่แล้ว', 'error');
+                return;
+            }
+
+            currentManagedListArray.push(newItem);
+            if (currentManagedListType === 'number') {
+                currentManagedListArray.sort((a, b) => a - b); // Sort after adding for number lists
+            }
+            savePredefinedList(currentManagedListStorageKey, currentManagedListArray); // Save the updated list
+            modalListItemInput.value = ''; 
+            renderModalListItems(); 
+            currentManagedListRenderFunction(); 
+            showMessage('เพิ่มรายการสำเร็จ!', 'success');
+        }
+
+        /**
+         * Removes an item from the currently managed list.
+         * @param {number} index - The index of the item to remove.
+         */
+        function removeModalListItem(index) {
+            currentManagedListArray.splice(index, 1);
+            savePredefinedList(currentManagedListStorageKey, currentManagedListArray); // Save the updated list
+            renderModalListItems(); 
+            currentManagedListRenderFunction(); 
+            showMessage('ลบรายการสำเร็จ!', 'success');
+        }
+
+        // Function to render all relevant parts of the UI
+        function renderAll() {
+            renderParticipants(); 
+            renderExpenses(); 
+            calculateSummary();
+            updateTotalExpensesAmountSummary(); 
+            renderPredefinedExpenseButtons(); 
+            renderPredefinedLocationButtons(); 
+            renderPredefinedAmountButtons(); 
+            renderPredefinedParticipantButtons(); 
+            updateCalculatedAmount(); 
+        }
+
+        // Removed toggleViewMode function
+        // /**
+        //  * Toggles the view mode between responsive, force mobile, and force desktop.
+        //  */
+        // function toggleViewMode() {
+        //     const body = document.body;
+        //     if (currentViewMode === 'auto') {
+        //         currentViewMode = 'mobile';
+        //         body.setAttribute('data-view-mode', 'mobile');
+        //         toggleViewBtn.textContent = 'สลับมุมมอง (Mobile)';
+        //     } else if (currentViewMode === 'mobile') {
+        //         currentViewMode = 'desktop';
+        //         body.setAttribute('data-view-mode', 'desktop');
+        //         toggleViewBtn.textContent = 'สลับมุมมอง (Desktop)';
+        //     } else { // currently desktop, switch to auto
+        //         body.removeAttribute('data-view-mode');
+        //         toggleViewBtn.textContent = 'สลับมุมมอง (Responsive)';
+        //         currentViewMode = 'auto';
+        //     }
+        //     localStorage.setItem(LS_VIEW_MODE, currentViewMode);
+        //     showMessage(`เปลี่ยนมุมมองเป็น ${currentViewMode === 'auto' ? 'Responsive' : currentViewMode === 'mobile' ? 'Mobile' : 'Desktop'}`, 'success');
+        // }
+
+        // Removed applySavedViewMode function
+        // /**
+        //  * Applies the saved view mode on initial load.
+        //  */
+        // function applySavedViewMode() {
+        //     const body = document.body;
+        //     if (currentViewMode === 'mobile') {
+        //         body.setAttribute('data-view-mode', 'mobile');
+        //         toggleViewBtn.textContent = 'สลับมุมมอง (Mobile)';
+        //     } else if (currentViewMode === 'desktop') {
+        //         body.setAttribute('data-view-mode', 'desktop');
+        //         toggleViewBtn.textContent = 'สลับมุมมอง (Desktop)';
+        //     } else { // 'auto'
+        //         body.removeAttribute('data-view-mode');
+        //         toggleViewBtn.textContent = 'สลับมุมมอง (Responsive)';
+        //     }
+        // }
+
+        /**
+         * Applies the current font size to the body element.
+         */
+        function applyFontSize() {
+            document.body.style.fontSize = `${fontSizes[currentFontSizeIndex]}px`;
+            localStorage.setItem(LS_FONT_SIZE_INDEX, currentFontSizeIndex);
+        }
+
+        /**
+         * Increases the font size.
+         */
+        function increaseFontSize() {
+            if (currentFontSizeIndex < fontSizes.length - 1) {
+                currentFontSizeIndex++;
+                applyFontSize();
+                showMessage(`ปรับขนาดตัวอักษรเป็น ${fontSizes[currentFontSizeIndex]}px`, 'success');
+            } else {
+                showMessage('นี่คือขนาดตัวอักษรที่ใหญ่ที่สุดแล้ว', 'info');
+            }
+        }
+
+        /**
+         * Decreases the font size.
+         */
+        function decreaseFontSize() {
+            if (currentFontSizeIndex > 0) {
+                currentFontSizeIndex--;
+                applyFontSize();
+                showMessage(`ปรับขนาดตัวอักษรเป็น ${fontSizes[currentFontSizeIndex]}px`, 'success');
+            } else {
+                showMessage('นี่คือขนาดตัวอักษรที่เล็กที่สุดแล้ว', 'info');
+            }
+        }
+
+        /**
+         * Handles quantity increment/decrement for new expense.
+         * @param {number} delta - The amount to change the quantity by (+1 or -1).
+         */
+        function adjustQuantity(delta) {
+            let currentQuantity = parseFloat(expenseQuantityInput.value) || 0;
+            currentQuantity += delta;
+            if (currentQuantity < 1) currentQuantity = 1; // Ensure quantity is at least 1
+            expenseQuantityInput.value = currentQuantity;
+            updateCalculatedAmount();
+        }
+
+        /**
+         * Handles quantity increment/decrement for editing expense.
+         * @param {number} delta - The amount to change the quantity by (+1 or -1).
+         */
+        function adjustEditQuantity(delta) {
+            let currentQuantity = parseFloat(editExpenseQuantityInput.value) || 0;
+            currentQuantity += delta;
+            if (currentQuantity < 1) currentQuantity = 1; // Ensure quantity is at least 1
+            editExpenseQuantityInput.value = currentQuantity;
+            updateEditCalculatedAmount();
+        }
+
+
+        // Event Listeners for main buttons
+        addParticipantBtn.addEventListener('click', () => {
+            const name = participantNameInput.value.trim();
+            if (addParticipant(name)) { 
+                participantNameInput.value = ''; 
+                showMessage('เพิ่มผู้เข้าร่วมสำเร็จ!', 'success'); 
+            } else if (name) {
+                showMessage('มีผู้เข้าร่วมชื่อนี้อยู่แล้ว', 'error');
+            } else {
+                showMessage('ชื่อผู้เข้าร่วมต้องไม่ว่างเปล่า', 'error');
+            }
+            renderParticipants(); 
+            calculateSummary();
+        });
+        participantNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const name = participantNameInput.value.trim();
+                if (addParticipant(name)) {
+                    participantNameInput.value = '';
+                    showMessage('เพิ่มผู้เข้าร่วมสำเร็จ!', 'success');
+                } else if (name) {
+                    showMessage('มีผู้เข้าร่วมชื่อนี้อยู่แล้ว', 'error');
+                } else {
+                    showMessage('ชื่อผู้เข้าร่วมต้องไม่ว่างเปล่า', 'error');
+                }
+                renderParticipants(); 
+                calculateSummary();
+            }
+        });
+
+        addExpenseBtn.addEventListener('click', handleAddExpense); 
+
+        expenseQuantityInput.addEventListener('input', updateCalculatedAmount);
+        expenseUnitPriceInput.addEventListener('input', updateCalculatedAmount);
+        decreaseQuantityBtn.addEventListener('click', () => adjustQuantity(-1)); // New quantity button listener
+        increaseQuantityBtn.addEventListener('click', () => adjustQuantity(1)); // New quantity button listener
+
+
+        partyDateInput.addEventListener('change', savePartyInfo);
+        partyLocationInput.addEventListener('input', savePartyInfo);
+        notesInput.addEventListener('input', saveNotes);
+
+        cancelPayerSelectionBtn.addEventListener('click', () => {
+            payerSelectionModal.classList.add('hidden');
+            resetExpenseForm(); 
+        });
+
+        cancelEditExpenseBtn.addEventListener('click', () => {
+            editExpenseModal.classList.add('hidden');
+            editingExpenseId = null; 
+        });
+
+        saveEditExpenseBtn.addEventListener('click', () => {
+            const newDescription = editExpenseDescriptionInput.value.trim();
+            const newQuantity = parseFloat(editExpenseQuantityInput.value) || 0;
+            const newUnitPrice = parseFloat(editExpenseUnitPriceInput.value) || 0;
+            const newAmount = newQuantity * newUnitPrice; 
+            const newPaidById = parseInt(editExpensePayerSelect.value);
+            const newSharedBy = Array.from(editSharersCheckboxesContainer.querySelectorAll('.edit-sharer-checkbox:checked'))
+                                     .map(checkbox => parseInt(checkbox.value));
+
+            if (!newDescription || isNaN(newQuantity) || newQuantity <= 0 || isNaN(newUnitPrice) || newUnitPrice < 0 || !newPaidById || newSharedBy.length === 0) {
+                showMessage('โปรดกรอกรายละเอียดค่าใช้จ่ายให้ถูกต้อง (รายละเอียด, จำนวน, ราคาต่อหน่วย, ผู้จ่าย, และผู้ร่วมหาร)', 'error');
+                return;
+            }
+            if (newAmount <= 0) {
+                showMessage('จำนวนเงินรวมต้องมากกว่า 0', 'error');
+                return;
+            }
+
+            const index = expenses.findIndex(exp => exp.id === editingExpenseId);
+            if (index !== -1) {
+                expenses[index] = {
+                    ...expenses[index], 
+                    description: newDescription,
+                    quantity: newQuantity, 
+                    unitPrice: newUnitPrice, 
+                    amount: newAmount, 
+                    paidBy: newPaidById,
+                    sharedBy: newSharedBy
+                };
+                saveExpenses(); // Save after editing
+                showMessage('อัปเดตค่าใช้จ่ายสำเร็จ!', 'success');
+            }
+
+            editExpenseModal.classList.add('hidden'); 
+            editingExpenseId = null; 
+            renderExpenses(); 
+            calculateSummary(); 
+        });
+
+        editExpenseQuantityInput.addEventListener('input', updateEditCalculatedAmount);
+        editExpenseUnitPriceInput.addEventListener('input', updateEditCalculatedAmount);
+        editDecreaseQuantityBtn.addEventListener('click', () => adjustEditQuantity(-1)); // New edit quantity button listener
+        editIncreaseQuantityBtn.addEventListener('click', () => adjustEditQuantity(1)); // New edit quantity button listener
+
+
+        printAllReportBtn.addEventListener('click', printAllReport);
+        printPartyAndParticipantsBtn.addEventListener('click', printPartyAndParticipantsReport);
+        printExpensesBtn.addEventListener('click', printExpensesReport);
+        printSummaryBtn.addEventListener('click', printSummaryReport);
+        clearAllBtn.addEventListener('click', clearAllData); 
+        confirmClearBtn.addEventListener('click', confirmClearAll); 
+        cancelClearConfirmBtn.addEventListener('click', () => { 
+            clearConfirmModal.classList.add('hidden');
+        });
+
+        manageLocationsBtn.addEventListener('click', () => {
+            openManageListModal('จัดการรายการสถานที่ยอดนิยม', predefinedLocations, renderPredefinedLocationButtons, LS_PREDEFINED_LOCATIONS, 'text');
+        });
+        manageParticipantsBtn.addEventListener('click', () => {
+            openManageListModal('จัดการรายการผู้เข้าร่วมยอดนิยม', predefinedParticipants, renderPredefinedParticipantButtons, LS_PREDEFINED_PARTICIPANTS, 'text');
+        });
+        manageExpensesBtn.addEventListener('click', () => {
+            openManageListModal('จัดการรายการค่าใช้จ่ายยอดนิยม', predefinedExpenses, renderPredefinedExpenseButtons, LS_PREDEFINED_EXPENSES, 'text');
+        });
+        manageAmountsBtn.addEventListener('click', () => {
+            openManageListModal('จัดการรายการจำนวนเงินยอดนิยม', predefinedAmounts, renderPredefinedAmountButtons, LS_PREDEFINED_AMOUNTS, 'number');
+        });
+
+
+        addModalListItemBtn.addEventListener('click', addModalListItem);
+        modalListItemInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addModalListItem();
+            }
+        });
+        closeManageListModalBtn.addEventListener('click', () => {
+            manageListModal.classList.add('hidden');
+            currentManagedListArray = null;
+            currentManagedListRenderFunction = null;
+            currentManagedListType = '';
+            currentManagedListStorageKey = '';
+        });
+
+        // Removed toggleViewBtn event listener
+        // toggleViewBtn.addEventListener('click', toggleViewMode); // Event listener for toggle view
+        decreaseFontSizeBtn.addEventListener('click', decreaseFontSize); // Event listener for decrease font size
+        increaseFontSizeBtn.addEventListener('click', increaseFontSize); // Event listener for increase font size
+
+        // PWA install event listeners
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault(); // Prevent the mini-infobar from appearing on mobile
+            deferredPrompt = e; // Stash the event so it can be triggered later.
+            installAppBtn.classList.remove('hidden'); // Show the install button
+        });
+
+        installAppBtn.addEventListener('click', async () => {
+            installAppBtn.classList.add('hidden'); // Hide the app provided install promotion
+            if (deferredPrompt) {
+                deferredPrompt.prompt(); // Show the install prompt
+                const { outcome } = await deferredPrompt.userChoice; // Wait for the user to respond to the prompt
+                console.log(`User response to the install prompt: ${outcome}`);
+                deferredPrompt = null; // We've used the prompt, and can't use it again, clear it.
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            installAppBtn.classList.add('hidden'); // Hide the install button
+            showMessage('ติดตั้งแอปสำเร็จ!', 'success');
+            deferredPrompt = null; // Clear the deferredPrompt
+        });
+
+
+        // Initial load and rendering
+        loadAllData(); // Load all data from localStorage first
+        renderAll(); // Then render the UI with the loaded (or default) data
+        setDefaultDate(); // Ensure date is set if not loaded
+        // Removed applySavedViewMode
+        // applySavedViewMode(); // Apply the saved view mode
+        applyFontSize(); // Apply the saved font size
+    </script>
+</body>
+</html>
